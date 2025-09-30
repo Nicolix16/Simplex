@@ -441,14 +441,14 @@ class SimplexSolver:
             return {"error": f"Error en el método Simplex: {str(e)}"}
     
     def _setup_initial_tableau(self, c: np.ndarray, A: np.ndarray, b: np.ndarray):
-        """Configurar tableau inicial del Simplex"""
+        """Configurar tablero simplex inicial del Simplex"""
         try:
             m, n = A.shape  # m restricciones, n variables
             
             # Crear matriz identidad para variables de holgura
             I = np.eye(m)
             
-            # El tableau estándar para maximización es:
+            # El tablero simplex estándar para maximización es:
             # [A | I | b]
             # [c | 0 | 0] (queremos maximizar c·x, así que c va positivo inicialmente)
             
@@ -472,11 +472,11 @@ class SimplexSolver:
             # Limpiar iteraciones
             self.iterations = []
             
-            # Guardar tableau inicial
-            self._save_iteration("Tableau Inicial")
+            # Guardar tablero inicial
+            self._save_iteration("Tablero Inicial")
             
         except Exception as e:
-            raise Exception(f"Error configurando tableau inicial: {str(e)}")
+            raise Exception(f"Error configurando tablero simplex inicial: {str(e)}")
     
     def _simplex_algorithm(self) -> Dict:
         """Ejecutar algoritmo Simplex con visualización detallada del proceso iterativo"""
@@ -686,22 +686,22 @@ class SimplexSolver:
         output.append(f"\nTipo de problema: {obj_type}")
         
         # Mostrar formulación inicial
-        output.append(f"\n📋 FORMULACIÓN DEL PROBLEMA:")
+        output.append(f"\nFORMULACIÓN DEL PROBLEMA:")
         output.append(f"Variables de decisión: {', '.join(self.variable_names)}")
         
         # Variables de decisión
-        output.append(f"\n🎯 SOLUCIÓN ÓPTIMA:")
+        output.append(f"\nSOLUCIÓN ÓPTIMA:")
         solution = result["optimal_solution"]
         for var, value in solution.items():
             if var in self.variable_names:  # Solo mostrar variables de decisión originales
                 output.append(f"  {var} = {value:.6f}")
         
         # Valor óptimo
-        output.append(f"\n💰 VALOR ÓPTIMO DE LA FUNCIÓN OBJETIVO:")
+        output.append(f"\nVALOR ÓPTIMO DE LA FUNCIÓN OBJETIVO:")
         output.append(f"  Z = {result['optimal_value']:.6f}")
         
         # Variables básicas finales
-        output.append(f"\n📊 VARIABLES BÁSICAS FINALES:")
+        output.append(f"\nVARIABLES BÁSICAS FINALES:")
         for i, var in enumerate(result["basic_variables"]):
             if i < len(self.tableau) - 1:  # Excluir fila objetivo
                 value = self.tableau[i, -1]
@@ -710,33 +710,33 @@ class SimplexSolver:
         
         # Proceso iterativo
         if "iterations" in result and len(result["iterations"]) > 1:
-            output.append(f"\n🔄 PROCESO ITERATIVO DEL MÉTODO SIMPLEX:")
+            output.append(f"\nPROCESO ITERATIVO DEL MÉTODO SIMPLEX:")
             output.append(f"Número total de iteraciones: {len(result['iterations']) - 1}")
             
             # Mostrar detalles de cada iteración
             for i, iteration in enumerate(result["iterations"]):
-                if iteration["description"] == "Tableau Inicial":
-                    output.append(f"\n📋 TABLEAU INICIAL:")
+                if iteration["description"] == "Tablero Inicial":
+                    output.append(f"\nTABLERO SIMPLEX INICIAL:")
                     output.append(self._format_tableau_with_highlight(iteration["tableau"]))
                 elif "pivot_info" in iteration:
                     pivot = iteration["pivot_info"]
-                    output.append(f"\n🔄 ITERACIÓN {pivot['iteration']}:")
-                    output.append(f"  📍 Variable entrante (columna pivote): {pivot['entering_variable']} (columna {pivot['pivot_column'] + 1})")
-                    output.append(f"  📤 Variable saliente (fila pivote): {pivot['leaving_variable']} (fila {pivot['pivot_row'] + 1})")
-                    output.append(f"  🎯 Elemento pivote: {pivot['pivot_element']:.6f}")
-                    output.append(f"\n  Tableau después del pivoteo:")
+                    output.append(f"\nITERACIÓN {pivot['iteration']}:")
+                    output.append(f"  Variable entrante (columna pivote): {pivot['entering_variable']} (columna {pivot['pivot_column'] + 1})")
+                    output.append(f"  Variable saliente (fila pivote): {pivot['leaving_variable']} (fila {pivot['pivot_row'] + 1})")
+                    output.append(f"  Elemento pivote: {pivot['pivot_element']:.6f}")
+                    output.append(f"\n  Tablero Simplex después del pivoteo:")
                     output.append(self._format_tableau_with_highlight(
                         iteration["tableau"], 
                         highlight_row=pivot['pivot_row'], 
                         highlight_col=pivot['pivot_column']
                     ))
         
-        # Tableau final
-        output.append(f"\n📋 TABLEAU FINAL:")
+        # Tablero final
+        output.append(f"\nTABLERO SIMPLEX FINAL:")
         output.append(self._format_tableau_with_highlight(self.tableau))
         
         # Interpretación de resultados
-        output.append(f"\n📝 INTERPRETACIÓN DE RESULTADOS:")
+        output.append(f"\nINTERPRETACIÓN DE RESULTADOS:")
         solution = result["optimal_solution"]
         if self.is_maximization:
             output.append(f"  • El valor máximo de la función objetivo es {result['optimal_value']:.6f}")
@@ -838,7 +838,7 @@ class SimplexSolver:
         output.append(f"    {var_list} ≥ 0")
         
         # Explicación de variables de holgura
-        output.append(f"\n📝 EXPLICACIÓN DE VARIABLES DE HOLGURA:")
+        output.append(f"\nEXPLICACIÓN DE VARIABLES DE HOLGURA:")
         for i in range(len(A)):
             output.append(f"  • s{i+1}: Representa los recursos no utilizados en la restricción {i+1}")
             output.append(f"    Si s{i+1} > 0, la restricción {i+1} no está activa (hay holgura)")
@@ -848,8 +848,16 @@ class SimplexSolver:
         return "\n".join(output)
     
     def _format_tableau_with_highlight(self, tableau: np.ndarray, highlight_row: int = -1, highlight_col: int = -1) -> str:
-        """Formatear tableau para mostrar con highlighting opcional del pivote"""
+        """Formatear tablero simplex para mostrar con highlighting opcional del pivote usando colores"""
         output = []
+        
+        # Códigos de color ANSI
+        RESET = '\033[0m'
+        RED = '\033[91m'      # Elemento pivote
+        YELLOW = '\033[93m'   # Fila pivote
+        BLUE = '\033[94m'     # Columna pivote
+        GREEN = '\033[92m'    # Variable básica de la fila pivote
+        BOLD = '\033[1m'
         
         # Encabezados
         headers = []
@@ -866,10 +874,17 @@ class SimplexSolver:
         # RHS
         headers.append("RHS")
         
-        # Fila de encabezados
-        header_line = "Base\t" + "\t".join(f"{h:>10}" for h in headers)
+        # Fila de encabezados con columna pivote resaltada
+        header_parts = []
+        for idx, h in enumerate(headers):
+            if idx == highlight_col and highlight_col >= 0:
+                header_parts.append(f"{BLUE}{BOLD}{h:>10}{RESET}")
+            else:
+                header_parts.append(f"{h:>10}")
+        
+        header_line = "Base\t" + "\t".join(header_parts)
         output.append(header_line)
-        output.append("-" * len(header_line))
+        output.append("-" * (len(header_line) - len(BLUE) - len(BOLD) - len(RESET) if highlight_col >= 0 else len(header_line)))
         
         # Filas de restricciones
         for i in range(tableau.shape[0] - 1):
@@ -879,26 +894,30 @@ class SimplexSolver:
             for j in range(tableau.shape[1]):
                 value = tableau[i, j]
                 if i == highlight_row and j == highlight_col:
-                    # Marcar elemento pivote
-                    row_data.append(f"[{value:8.4f}]*")
+                    # Elemento pivote - rojo y marcado
+                    row_data.append(f"{RED}{BOLD}[{value:8.4f}]*{RESET}")
                 elif i == highlight_row:
-                    # Marcar fila pivote
-                    row_data.append(f"({value:8.4f})")
+                    # Fila pivote - amarillo
+                    row_data.append(f"{YELLOW}({value:8.4f}){RESET}")
                 elif j == highlight_col:
-                    # Marcar columna pivote
-                    row_data.append(f"<{value:8.4f}>")
+                    # Columna pivote - azul
+                    row_data.append(f"{BLUE}<{value:8.4f}>{RESET}")
                 else:
                     row_data.append(f"{value:10.4f}")
             
-            prefix = f"→{base_var:>3}" if i == highlight_row else f"{base_var:>4}"
+            # Variable básica de la fila pivote en verde
+            if i == highlight_row:
+                prefix = f"{GREEN}→{base_var:>3}{RESET}"
+            else:
+                prefix = f"{base_var:>4}"
             output.append(f"{prefix}\t" + "\t".join(row_data))
         
         # Fila objetivo
         obj_data = []
         for j in range(tableau.shape[1]):
             value = tableau[-1, j]
-            if j == highlight_col:
-                obj_data.append(f"<{value:8.4f}>")
+            if j == highlight_col and highlight_col >= 0:
+                obj_data.append(f"{BLUE}<{value:8.4f}>{RESET}")
             else:
                 obj_data.append(f"{value:10.4f}")
         
@@ -906,12 +925,12 @@ class SimplexSolver:
         
         if highlight_row >= 0 and highlight_col >= 0:
             output.append("")
-            output.append("Leyenda: [  ]* = Elemento pivote, ( ) = Fila pivote, < > = Columna pivote")
+            output.append(f"Leyenda: {RED}{BOLD}[ ]*{RESET} = Elemento pivote, {YELLOW}( ){RESET} = Fila pivote, {BLUE}< >{RESET} = Columna pivote, {GREEN}→{RESET} = Variable saliente")
         
         return "\n".join(output)
     
     def _format_tableau(self, tableau: np.ndarray) -> str:
-        """Formatear tableau para mostrar (método original)"""
+        """Formatear tablero simplex para mostrar (método original)"""
         return self._format_tableau_with_highlight(tableau)
     
     def get_iterations_summary(self, result: Dict) -> str:

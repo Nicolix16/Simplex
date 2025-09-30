@@ -677,6 +677,13 @@ class LinearProgrammingGUI:
             # Intentar extraer datos específicos de la respuesta
             graph_data = self._extract_graph_data(response)
             
+            # Validar resultados con Simplex como referencia
+            validation_result = self._validate_graphic_solution(graph_data)
+            if validation_result:
+                self.result_text.insert(tk.END, f"\n{'-'*50}\n")
+                self.result_text.insert(tk.END, "VALIDACIÓN CON MÉTODO SIMPLEX:\n")
+                self.result_text.insert(tk.END, validation_result)
+            
             if graph_data and graph_data.get('restrictions') and graph_data.get('vertices'):
                 print("Usando datos extraídos de la IA")
                 self._plot_from_ai_data(graph_data)
@@ -1207,6 +1214,66 @@ class LinearProgrammingGUI:
                         bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
             self.ax.set_title("Gráfica del Método Gráfico")
             print(f"Error en gráfica inicial: {e}")
+    
+    def _validate_graphic_solution(self, graph_data):
+        """Validar la solución del método gráfico usando Simplex como referencia"""
+        try:
+            if not graph_data or not graph_data.get('optimal_point') or not graph_data.get('optimal_value'):
+                return None
+                
+            # Construir el problema para Simplex
+            if not graph_data.get('objective') or not graph_data.get('restrictions'):
+                return None
+                
+            # Extraer datos del método gráfico
+            objective_str = graph_data['objective']
+            restrictions = graph_data['restrictions']
+            graphic_optimal = graph_data['optimal_point']
+            graphic_value = graph_data['optimal_value']
+            
+            # Construir texto del problema para Simplex
+            problem_text = f"""
+=== DATOS PARA GRÁFICA ===
+FUNCION_OBJETIVO: {objective_str}
+RESTRICCIONES:
+"""
+            for restriction in restrictions:
+                problem_text += f"- {restriction}\n"
+            
+            problem_text += "=== FIN DATOS ==="
+            
+            # Resolver con Simplex
+            from simplex_solver import SimplexSolver
+            solver = SimplexSolver()
+            simplex_result = solver.solve_from_text(problem_text)
+            
+            if simplex_result.get('status') != 'optimal':
+                return f"⚠️ Simplex no pudo resolver el problema: {simplex_result.get('error', 'Estado no óptimo')}\n"
+            
+            # Comparar resultados
+            simplex_value = simplex_result['optimal_value']
+            simplex_solution = simplex_result['optimal_solution']
+            
+            validation_msg = ""
+            validation_msg += f"🔍 COMPARACIÓN DE MÉTODOS:\n"
+            validation_msg += f"• Método Gráfico (IA): Punto {graphic_optimal}, Valor = {graphic_value}\n"
+            validation_msg += f"• Método Simplex: x1={simplex_solution.get('x1', 'N/A'):.3f}, x2={simplex_solution.get('x2', 'N/A'):.3f}, Valor = {simplex_value:.3f}\n"
+            
+            # Verificar si coinciden (con tolerancia para errores de redondeo)
+            tolerance = 0.1
+            value_diff = abs(graphic_value - simplex_value)
+            
+            if value_diff <= tolerance:
+                validation_msg += f"✅ RESULTADOS COINCIDEN (diferencia: {value_diff:.3f})\n"
+            else:
+                validation_msg += f"❌ DISCREPANCIA DETECTADA (diferencia: {value_diff:.3f})\n"
+                validation_msg += f"   El método Simplex es más confiable matemáticamente.\n"
+                validation_msg += f"   Considera usar la solución del Simplex como referencia.\n"
+            
+            return validation_msg
+            
+        except Exception as e:
+            return f"⚠️ Error en validación: {str(e)}\n"
     
     def run(self):
         """Ejecutar la aplicación"""

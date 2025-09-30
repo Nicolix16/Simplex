@@ -33,6 +33,21 @@ class GeminiAPI:
         prompt = """
         Analiza la imagen que contiene un problema de programación lineal que debe resolverse usando el método gráfico.
 
+        INSTRUCCIONES CRÍTICAS PARA EL ANÁLISIS:
+        1. Identifica TODAS las restricciones del problema, incluyendo límites inferiores (x ≥ valor)
+        2. Encuentra los puntos de intersección de TODAS las restricciones
+        3. Verifica la factibilidad de cada punto candidato
+        4. Evalúa la función objetivo SOLO en los vértices factibles
+        5. Asegúrate de que los cálculos sean matemáticamente exactos
+
+        FORMATO DE VERIFICACIÓN:
+        Para cada punto candidato (x1, x2), verifica que cumpla TODAS las restricciones:
+        - Si x1 + 3x2 ≤ 200, entonces calcular x1 + 3x2 y verificar ≤ 200
+        - Si x1 + x2 ≤ 100, entonces calcular x1 + x2 y verificar ≤ 100
+        - Si x1 ≥ 20, entonces verificar x1 ≥ 20
+        - Si x2 ≥ 10, entonces verificar x2 ≥ 10
+        - Siempre verificar x1 ≥ 0 y x2 ≥ 0
+
         IMPORTANTE: Al final de tu respuesta, incluye una sección llamada "DATOS PARA GRÁFICA" con el siguiente formato EXACTO:
 
         === DATOS PARA GRÁFICA ===
@@ -51,43 +66,37 @@ class GeminiAPI:
         VALOR_OPTIMO: Z = valor
         === FIN DATOS ===
 
-        Ejemplo de formato:
+        Ejemplo de formato con verificación:
         === DATOS PARA GRÁFICA ===
-        FUNCION_OBJETIVO: Maximizar Z = 3x1 + 2x2
+        FUNCION_OBJETIVO: Maximizar Z = 30x1 + 50x2
         RESTRICCIONES:
-        - 1x1 + 1x2 <= 6
-        - 2x1 + 1x2 <= 8
-        - 1x1 <= 4
-        - 1x2 <= 5
+        - 1x1 + 3x2 <= 200
+        - 1x1 + 1x2 <= 100
+        - x1 >= 20
+        - x2 >= 10
         - x1 >= 0
         - x2 >= 0
         VERTICES:
-        - (x1, x2) = (0, 0)
-        - (x1, x2) = (0, 5)
-        - (x1, x2) = (2, 4)
-        - (x1, x2) = (4, 0)
-        SOLUCION_OPTIMA: (x1, x2) = (2, 4)
-        VALOR_OPTIMO: Z = 14
+        - (x1, x2) = (50, 50)
+        - (x1, x2) = (20, 60)
+        - (x1, x2) = (90, 10)
+        - (x1, x2) = (20, 10)
+        SOLUCION_OPTIMA: (x1, x2) = (50, 50)
+        VALOR_OPTIMO: Z = 4000
         === FIN DATOS ===
 
-        IMPORTANTE: Incluye TODAS las restricciones del problema, incluyendo:
-        - Restricciones principales con ambas variables (ax1 + bx2 <= c)
-        - Restricciones de límite superior (x1 <= valor, x2 <= valor)
-        - Restricciones de no negatividad (x1 >= 0, x2 >= 0)
-        - Cualquier restricción de límite inferior (x1 >= valor, x2 >= valor)
+        PASOS OBLIGATORIOS:
+        1. Lee cuidadosamente TODAS las restricciones del problema
+        2. Encuentra TODOS los puntos de intersección posibles
+        3. Para CADA punto, verifica TODAS las restricciones matemáticamente
+        4. Incluye SOLO los puntos que satisfacen TODAS las restricciones
+        5. Evalúa la función objetivo en cada vértice factible
+        6. Selecciona el punto con mayor (maximización) o menor (minimización) valor
+        7. Revisa tus cálculos antes de dar la respuesta final
 
         Usa SIEMPRE el formato exacto mostrado arriba para que el programa pueda leerlo correctamente.
 
-        Ahora resuelve el problema paso a paso:
-        1. Identifica la función objetivo (maximizar o minimizar)
-        2. Lista todas las restricciones del problema
-        3. Determina las variables de decisión
-        4. Resuelve usando el método gráfico
-        5. Encuentra los vértices de la región factible
-        6. Evalúa la función objetivo en cada vértice
-        7. Determina la solución óptima
-
-        Proporciona el análisis completo Y al final incluye obligatoriamente la sección "DATOS PARA GRÁFICA" con el formato exacto mostrado arriba.
+        Ahora resuelve el problema paso a paso con verificación matemática rigurosa.
         """
         
         # Preparar el payload para la API
