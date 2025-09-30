@@ -898,25 +898,39 @@ class SimplexSolver:
         # Proceso iterativo
         if "iterations" in result and len(result["iterations"]) > 1:
             output.append(f"\nPROCESO ITERATIVO DEL MÉTODO SIMPLEX:")
+            output.append("=" * 60)
             output.append(f"Número total de iteraciones: {len(result['iterations']) - 1}")
             
             # Mostrar detalles de cada iteración
             for i, iteration in enumerate(result["iterations"]):
                 if iteration["description"] == "Tablero Inicial":
-                    output.append(f"\nTABLERO SIMPLEX INICIAL:")
+                    output.append(f"\n{'TABLERO SIMPLEX INICIAL':^60}")
+                    output.append("=" * 60)
+                    output.append(f"Variables básicas: {', '.join(iteration.get('basic_variables', []))}")
+                    output.append(f"Variables no básicas: {', '.join(iteration.get('non_basic_variables', []))}")
                     output.append(self._format_tableau_with_highlight(iteration["tableau"]))
                 elif "pivot_info" in iteration:
                     pivot = iteration["pivot_info"]
-                    output.append(f"\nITERACIÓN {pivot['iteration']}:")
-                    output.append(f"  Variable entrante (columna pivote): {pivot['entering_variable']} (columna {pivot['pivot_column'] + 1})")
-                    output.append(f"  Variable saliente (fila pivote): {pivot['leaving_variable']} (fila {pivot['pivot_row'] + 1})")
-                    output.append(f"  Elemento pivote: {pivot['pivot_element']:.6f}")
-                    output.append(f"\n  Tablero Simplex después del pivoteo:")
+                    output.append(f"\n{'ITERACIÓN ' + str(pivot['iteration']):^60}")
+                    output.append("-" * 60)
+                    output.append(f"🔹 Variable entrante: {pivot['entering_variable']} (columna {pivot['pivot_column'] + 1})")
+                    output.append(f"🔸 Variable saliente: {pivot['leaving_variable']} (fila {pivot['pivot_row'] + 1})")  
+                    output.append(f"⭐ Elemento pivote: {pivot['pivot_element']:.6f}")
+                    output.append(f"📊 Variables básicas: {', '.join(iteration.get('basic_variables', []))}")
+                    output.append(f"📉 Variables no básicas: {', '.join(iteration.get('non_basic_variables', []))}")
+                    output.append(f"\nTablero después del pivoteo:")
                     output.append(self._format_tableau_with_highlight(
                         iteration["tableau"], 
                         highlight_row=pivot['pivot_row'], 
                         highlight_col=pivot['pivot_column']
                     ))
+                    
+                    # Mostrar el valor actual de Z
+                    current_z = iteration["tableau"][-1, -1]
+                    output.append(f"💰 Valor actual de Z: {current_z:.6f}")
+            
+            output.append(f"\n{'CONVERGENCIA ALCANZADA':^60}")
+            output.append("=" * 60)
         
         # Tablero final
         output.append(f"\nTABLERO SIMPLEX FINAL:")
@@ -1067,7 +1081,7 @@ class SimplexSolver:
         
         header_line = "Base\t" + "\t".join(header_parts)
         output.append(header_line)
-        output.append("=" * 80)
+        output.append("=" * len(header_line.expandtabs()))
         
         # Filas de restricciones
         for i in range(tableau.shape[0] - 1):
@@ -1095,14 +1109,19 @@ class SimplexSolver:
                 prefix = f"{base_var:>4}"
             output.append(f"{prefix}\t" + "\t".join(row_data))
         
-        # Fila objetivo - SIEMPRE mostrar función objetivo original
+        # Fila objetivo - mostrar valores REALES del tablero actual
         obj_data = []
         for j in range(tableau.shape[1]):
-            # Usar función objetivo original si está disponible
-            if hasattr(self, 'original_objective') and j < len(self.original_objective):
-                value = self.original_objective[j]
-            else:
-                value = tableau[-1, j]
+            value = tableau[-1, j]
+            
+            # Solo para variables artificiales (que tienen valores enormes), mostrar como 0 o valores simplificados
+            if abs(value) > 100000:  # Es probable que sea un coeficiente Big M
+                # Si es la columna RHS (última), mostrar el valor real
+                if j == tableau.shape[1] - 1:
+                    value = value  # Mantener valor real de Z
+                else:
+                    # Para variables artificiales, mostrar 0 para claridad
+                    value = 0.0
                 
             if j == highlight_col and highlight_col >= 0:
                 obj_data.append(f"[{value:8.4f}]")
