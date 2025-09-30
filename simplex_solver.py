@@ -874,7 +874,8 @@ class SimplexSolver:
         
         # Mostrar formulación inicial
         output.append(f"\nFORMULACIÓN DEL PROBLEMA:")
-        output.append(f"Variables de decisión: {', '.join(self.variable_names)}")
+        variables_with_constraint = ", ".join(self.variable_names) + " ≥ 0"
+        output.append(f"Variables de decisión: {variables_with_constraint}")
         
         # Variables de decisión
         output.append(f"\nSOLUCIÓN ÓPTIMA:")
@@ -1041,6 +1042,30 @@ class SimplexSolver:
         output.append("\n" + "=" * 80)
         return "\n".join(output)
     
+    def _format_value(self, value: float, width: int = 8) -> str:
+        """Formatear valores de manera limpia, ocultando ceros innecesarios"""
+        # Si es muy pequeño, considerar como cero
+        if abs(value) < 1e-10:
+            return f"{0:>{width}.0f}"
+        
+        # Si es muy grande (probablemente Big M), simplificar
+        if abs(value) > 100000:
+            return f"{'M':>{width}}"
+            
+        # Si es entero o muy cerca de entero, mostrar sin decimales
+        if abs(value - round(value)) < 1e-6:
+            return f"{int(round(value)):>{width}}"
+            
+        # Para fracciones comunes, mostrar de forma simplificada
+        if abs(value) >= 0.1:
+            # Mostrar máximo 2 decimales y eliminar ceros finales
+            formatted = f"{value:.2f}".rstrip('0').rstrip('.')
+            return f"{formatted:>{width}}"
+        else:
+            # Para valores muy pequeños, mostrar con más precisión
+            formatted = f"{value:.4f}".rstrip('0').rstrip('.')
+            return f"{formatted:>{width}}"
+
     def _format_tableau_with_highlight(self, tableau: np.ndarray, highlight_row: int = -1, highlight_col: int = -1) -> str:
         """Formatear tablero simplex para mostrar con highlighting visual del pivote"""
         output = []
@@ -1075,13 +1100,13 @@ class SimplexSolver:
         header_parts = []
         for idx, h in enumerate(headers):
             if idx == highlight_col and highlight_col >= 0:
-                header_parts.append(f">>>{h:>7}<<<")
+                header_parts.append(f">>>{h.upper()}<<<")
             else:
-                header_parts.append(f"{h:>10}")
+                header_parts.append(f"{h.upper():>6}")
         
-        header_line = "Base\t" + "\t".join(header_parts)
+        header_line = f"{'':>4}\t" + "\t".join(header_parts)
         output.append(header_line)
-        output.append("=" * len(header_line.expandtabs()))
+        output.append("-" * 50)
         
         # Filas de restricciones
         for i in range(tableau.shape[0] - 1):
@@ -1090,23 +1115,25 @@ class SimplexSolver:
             
             for j in range(tableau.shape[1]):
                 value = tableau[i, j]
+                formatted_value = self._format_value(value, 6)
+                
                 if i == highlight_row and j == highlight_col:
                     # Elemento pivote - destacado con asteriscos
-                    row_data.append(f"***{value:6.4f}***")
+                    row_data.append(f"***{formatted_value.strip()}***")
                 elif i == highlight_row:
                     # Fila pivote - destacado con paréntesis
-                    row_data.append(f"({value:8.4f})")
+                    row_data.append(f"({formatted_value.strip()})")
                 elif j == highlight_col:
                     # Columna pivote - destacado con corchetes
-                    row_data.append(f"[{value:8.4f}]")
+                    row_data.append(f"[{formatted_value.strip()}]")
                 else:
-                    row_data.append(f"{value:10.4f}")
+                    row_data.append(formatted_value)
             
-            # Variable básica de la fila pivote destacada
+            # Variable básica - formato simple como en la imagen
             if i == highlight_row:
-                prefix = f">>> {base_var} <<<"
+                prefix = f">>> {base_var.upper()} <<<"
             else:
-                prefix = f"{base_var:>4}"
+                prefix = f"{base_var.upper():>4}"
             output.append(f"{prefix}\t" + "\t".join(row_data))
         
         # Fila objetivo - mostrar valores REALES del tablero actual
@@ -1118,15 +1145,17 @@ class SimplexSolver:
             if abs(value) > 100000:  # Es probable que sea un coeficiente Big M
                 # Si es la columna RHS (última), mostrar el valor real
                 if j == tableau.shape[1] - 1:
-                    value = value  # Mantener valor real de Z
+                    formatted_value = self._format_value(value, 6)
                 else:
                     # Para variables artificiales, mostrar 0 para claridad
-                    value = 0.0
+                    formatted_value = self._format_value(0.0, 6)
+            else:
+                formatted_value = self._format_value(value, 6)
                 
             if j == highlight_col and highlight_col >= 0:
-                obj_data.append(f"[{value:8.4f}]")
+                obj_data.append(f"[{formatted_value.strip()}]")
             else:
-                obj_data.append(f"{value:10.4f}")
+                obj_data.append(formatted_value)
         
         output.append(f"{'Z':>4}\t" + "\t".join(obj_data))
         
