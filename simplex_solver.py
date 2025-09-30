@@ -41,6 +41,7 @@ class SimplexSolver:
                 c=problem_data["objective_coeffs"],
                 A=problem_data["constraint_matrix"],
                 b=problem_data["rhs"],
+                constraint_types=problem_data.get("constraint_types", []),
                 is_maximization=problem_data["is_maximization"],
                 variable_names=problem_data.get("variable_names", []),
                 constraint_names=problem_data.get("constraint_names", [])
@@ -78,6 +79,7 @@ class SimplexSolver:
             objective_coeffs = []
             constraint_matrix = []
             rhs = []
+            constraint_types = []  # Agregar seguimiento de tipos de restricción
             is_maximization = True
             variable_names = ["x1", "x2"]
             
@@ -111,22 +113,10 @@ class SimplexSolver:
                     restriction = line[1:].strip()
                     constraint_data = self._parse_constraint(restriction)
                     if constraint_data and constraint_data["type"] == "constraint":
-                        # Manejar restricciones >= de manera especial
-                        if constraint_data.get("original_operator") == ">=":
-                            # Para x1 >= 20, agregar variable de superávit: x1 - s = 20
-                            # En el tableau esto se convierte en x1 - s = 20
-                            # Pero para simplificar, vamos a reescribir como -x1 <= -20
-                            # y luego multiplicar por -1 toda la fila
-                            coeffs = constraint_data["coeffs"]
-                            rhs_val = constraint_data["rhs"]
-                            # Invertir signos para convertir >= a <=
-                            coeffs = [-c for c in coeffs]
-                            rhs_val = -rhs_val
-                            constraint_matrix.append(coeffs)
-                            rhs.append(rhs_val)
-                        else:
-                            constraint_matrix.append(constraint_data["coeffs"])
-                            rhs.append(constraint_data["rhs"])
+                        constraint_matrix.append(constraint_data["coeffs"])
+                        rhs.append(constraint_data["rhs"])
+                        # Guardar el tipo de restricción original
+                        constraint_types.append(constraint_data.get("original_operator", "<="))
                     elif constraint_data and constraint_data["type"] == "bounds":
                         # Ignorar restricciones de no negatividad x1, x2 >= 0
                         pass
@@ -138,6 +128,7 @@ class SimplexSolver:
                 "objective_coeffs": objective_coeffs,
                 "constraint_matrix": constraint_matrix,
                 "rhs": rhs,
+                "constraint_types": constraint_types,  # Incluir tipos de restricción
                 "is_maximization": is_maximization,
                 "variable_names": variable_names,
                 "constraint_names": [f"R{i+1}" for i in range(len(constraint_matrix))]
@@ -279,8 +270,15 @@ class SimplexSolver:
             # Parsear restricción normal
             # Patrones para diferentes formatos
             patterns = [
+                # x2 >= 2x1 (x2 >= ax1)
+                r"x2([<>=]{1,2})([+-]?\d*\.?\d*)x1",
+                # x1 >= 2x2 (x1 >= bx2) 
+                r"x1([<>=]{1,2})([+-]?\d*\.?\d*)x2",
+                # ax1 + bx2 <= c
                 r"([+-]?\d*\.?\d*)x1([+-]\d*\.?\d*)x2([<>=]{1,2})(\d+\.?\d*)",
+                # ax1 <= c
                 r"([+-]?\d*\.?\d*)x1([<>=]{1,2})(\d+\.?\d*)",
+                # bx2 <= c
                 r"([+-]?\d*\.?\d*)x2([<>=]{1,2})(\d+\.?\d*)"
             ]
             
@@ -289,7 +287,55 @@ class SimplexSolver:
                 if match:
                     groups = match.groups()
                     
-                    if len(groups) == 4:  # ax1 + bx2 <= c
+                    # Nuevo: Manejo de x2 >= 2x1 o x1 >= 2x2
+                    if "x2" in pattern and "x1" in pattern and len(groups) == 2:
+                        op, coeff_str = groups
+                        
+                        # Parsear coeficiente
+                        if coeff_str == "" or coeff_str == "+":
+                            coeff = 1.0
+                        elif coeff_str == "-":
+                            coeff = -1.0
+                        else:
+                            coeff = float(coeff_str)
+                        
+                        if "x2" in pattern and pattern.startswith(r"x2"):
+                            # x2 >= 2x1 -> -2x1 + x2 >= 0 -> -2x1 + x2 >= 0
+                            # Para convertir a forma estándar: 2x1 - x2 <= 0
+                            a = coeff  # coeficiente de x1
+                            b = -1.0   # coeficiente de x2
+                            c = 0.0    # RHS
+                            original_op = ">=" if ">=" in op else "<="
+                            
+                            # Si era >=, necesitamos convertir a <=
+                            if original_op == ">=":
+                                # x2 >= 2x1 -> -2x1 + x2 >= 0 -> 2x1 - x2 <= 0
+                                a = -a  # Cambiar signo
+                                b = -b  # Cambiar signo
+                                c = -c  # Cambiar signo (sigue siendo 0)
+                                original_op = "<="
+                        else:
+                            # x1 >= 2x2 -> x1 - 2x2 >= 0
+                            a = 1.0    # coeficiente de x1
+                            b = -coeff # coeficiente de x2
+                            c = 0.0    # RHS
+                            original_op = ">=" if ">=" in op else "<="
+                            
+                            if original_op == ">=":
+                                # x1 >= 2x2 -> x1 - 2x2 >= 0 -> -x1 + 2x2 <= 0
+                                a = -a
+                                b = -b
+                                c = -c
+                                original_op = "<="
+                        
+                        return {
+                            "coeffs": [a, b],
+                            "rhs": c,
+                            "type": "constraint",
+                            "original_operator": original_op
+                        }
+                    
+                    elif len(groups) == 4:  # ax1 + bx2 <= c
                         a_str, b_str, op, c = groups
                         
                         # Parsear coeficientes
@@ -378,8 +424,8 @@ class SimplexSolver:
             return None
     
     def solve(self, c: List[float], A: List[List[float]], b: List[float], 
-             is_maximization: bool = True, variable_names: List[str] = None,
-             constraint_names: List[str] = None) -> Dict:
+             constraint_types: List[str] = None, is_maximization: bool = True, 
+             variable_names: List[str] = None, constraint_names: List[str] = None) -> Dict:
         """
         Resolver problema de programación lineal usando método Simplex
         
@@ -395,15 +441,20 @@ class SimplexSolver:
             Dict: Resultado de la solución
         """
         try:
+            # Solo maximización según el usuario
+            self.is_maximization = True
+            
             # Configurar nombres
             if variable_names is None:
                 variable_names = [f"x{i+1}" for i in range(len(c))]
             if constraint_names is None:
                 constraint_names = [f"R{i+1}" for i in range(len(A))]
+            if constraint_types is None:
+                constraint_types = ["<=" for _ in range(len(A))]
                 
             self.variable_names = variable_names
             self.constraint_names = constraint_names
-            self.is_maximization = is_maximization
+            self.constraint_types = constraint_types
             
             # Convertir a arrays numpy
             c = np.array(c, dtype=float)
@@ -422,7 +473,7 @@ class SimplexSolver:
                 c = -c
             
             # Crear tableau inicial
-            self._setup_initial_tableau(c, A, b)
+            self._setup_initial_tableau(c, A, b, constraint_types)
             
             # Resolver usando método Simplex
             result = self._simplex_algorithm()
@@ -440,56 +491,188 @@ class SimplexSolver:
         except Exception as e:
             return {"error": f"Error en el método Simplex: {str(e)}"}
     
-    def _setup_initial_tableau(self, c: np.ndarray, A: np.ndarray, b: np.ndarray):
-        """Configurar tablero simplex inicial del Simplex"""
+    def _setup_initial_tableau(self, c: np.ndarray, A: np.ndarray, b: np.ndarray, constraint_types: List[str]):
+        """Configurar tablero simplex inicial con manejo correcto de restricciones >="""
         try:
             m, n = A.shape  # m restricciones, n variables
             
-            # Crear matriz identidad para variables de holgura
-            I = np.eye(m)
+            print(f"DEBUG: Configurando tablero {m}x{n}")
+            print(f"Variables originales: {self.variable_names}")
+            print(f"Matriz A:\n{A}")
+            print(f"Vector b: {b}")
+            print(f"Coeficientes objetivo c: {c}")
+            print(f"Tipos de restricciones: {constraint_types}")
             
-            # El tablero simplex estándar para maximización es:
-            # [A | I | b]
-            # [c | 0 | 0] (queremos maximizar c·x, así que c va positivo inicialmente)
+            # Verificar si hay restricciones >= que requieren método Big M
+            has_ge_constraints = any(ct == ">=" for ct in constraint_types)
             
-            # Parte superior: restricciones con variables de holgura
-            upper = np.hstack([A, I, b.reshape(-1, 1)])
-            
-            # Parte inferior: función objetivo 
-            # Para el método Simplex estándar, ponemos -c en la fila objetivo
-            # porque queremos que todos los coeficientes sean no positivos al final
-            lower = np.hstack([-c, np.zeros(m), np.array([0])])
-            
-            # Combinar
-            self.tableau = np.vstack([upper, lower])
-            
-            # Variables básicas iniciales (variables de holgura)
-            self.basic_variables = [f"s{i+1}" for i in range(m)]
-            
-            # Variables no básicas iniciales (variables originales)
-            self.non_basic_variables = self.variable_names.copy()
-            
-            # Limpiar iteraciones
-            self.iterations = []
-            
-            # Guardar tablero inicial
-            self._save_iteration("Tablero Inicial")
-            
+            if has_ge_constraints:
+                # Usar método Big M
+                return self._setup_big_m_tableau(c, A, b, constraint_types)
+            else:
+                # Método estándar para restricciones <=
+                return self._setup_standard_tableau(c, A, b, constraint_types)
+                
         except Exception as e:
             raise Exception(f"Error configurando tablero simplex inicial: {str(e)}")
+    
+    def _setup_standard_tableau(self, c: np.ndarray, A: np.ndarray, b: np.ndarray, constraint_types: List[str]):
+        """Configurar tablero para restricciones <= solamente"""
+        m, n = A.shape
+        
+        # Construir tablero estándar
+        I = np.eye(m)  # Matriz identidad para variables de holgura
+        
+        # Tablero: [A | I | b]
+        #         [-c | 0 | 0]
+        upper = np.hstack([A, I, b.reshape(-1, 1)])
+        lower = np.hstack([-c, np.zeros(m), np.array([0])])
+        
+        self.tableau = np.vstack([upper, lower])
+        
+        # Variables básicas: variables de holgura s1, s2, ...
+        self.basic_variables = [f"s{i+1}" for i in range(m)]
+        # Variables no básicas: variables originales x1, x2, ...
+        self.non_basic_variables = self.variable_names.copy()
+        
+        # Limpiar iteraciones
+        self.iterations = []
+        
+        # Guardar tablero inicial
+        self._save_iteration("Tablero Inicial")
+    
+    def _setup_big_m_tableau(self, c: np.ndarray, A: np.ndarray, b: np.ndarray, constraint_types: List[str]):
+        """Configurar tablero usando método Big M para manejar restricciones >="""
+        m, n = A.shape
+        M = 1000000  # Valor Big M
+        
+        print(f"Usando método Big M (M = {M})")
+        
+        # Guardar función objetivo original para mostrar en la visualización
+        self.original_objective = np.zeros(n + sum(1 for ct in constraint_types if ct == "<=") + 
+                                         sum(1 for ct in constraint_types if ct == ">=") * 2 + 1)
+        self.original_objective[:n] = -c  # Función objetivo original (negativa para maximización)
+        
+        # Contar variables adicionales necesarias
+        num_slack = sum(1 for ct in constraint_types if ct == "<=")
+        num_surplus = sum(1 for ct in constraint_types if ct == ">=")
+        num_artificial = num_surplus  # Una variable artificial por cada >=
+        
+        total_vars = n + num_slack + num_surplus + num_artificial
+        
+        print(f"Variables: {n} originales + {num_slack} holgura + {num_surplus} superávit + {num_artificial} artificiales = {total_vars}")
+        
+        # Crear matriz expandida
+        A_expanded = np.zeros((m, total_vars))
+        A_expanded[:, :n] = A  # Variables originales
+        
+        # Índices para agregar variables
+        slack_idx = n
+        surplus_idx = n + num_slack  
+        artificial_idx = n + num_slack + num_surplus
+        
+        basic_vars = []
+        
+        # Procesar cada restricción
+        for i in range(m):
+            if constraint_types[i] == "<=":
+                # Restricción <=: agregar variable de holgura
+                A_expanded[i, slack_idx] = 1.0
+                basic_vars.append(f"s{slack_idx - n + 1}")
+                slack_idx += 1
+                print(f"Restricción {i+1}: {A[i]} <= {b[i]} -> agregar s{slack_idx - n}")
+                
+            elif constraint_types[i] == ">=":
+                # Restricción >=: agregar variable de superávit (-1) y artificial (+1)
+                A_expanded[i, surplus_idx] = -1.0
+                A_expanded[i, artificial_idx] = 1.0
+                basic_vars.append(f"a{artificial_idx - n - num_slack - num_surplus + 1}")
+                print(f"Restricción {i+1}: {A[i]} >= {b[i]} -> agregar -e{surplus_idx - n - num_slack + 1} + a{artificial_idx - n - num_slack - num_surplus + 1}")
+                surplus_idx += 1
+                artificial_idx += 1
+        
+        # Función objetivo expandida
+        obj_expanded = np.zeros(total_vars + 1)
+        obj_expanded[:n] = -c  # Función objetivo original (negativa para maximización)
+        
+        # Penalizar variables artificiales con +M
+        art_start = n + num_slack + num_surplus
+        for i in range(num_artificial):
+            obj_expanded[art_start + i] = M
+            print(f"Penalizando variable artificial a{i+1} con +M")
+        
+        # Construir tablero inicial con función objetivo original para visualización
+        upper = np.hstack([A_expanded, b.reshape(-1, 1)])
+        
+        # Crear función objetivo ORIGINAL para mostrar (sin penalizaciones Big M)
+        obj_display = np.zeros(total_vars + 1)
+        obj_display[:n] = -c  # Función objetivo original (negativa para maximización)
+        # No agregar penalizaciones Big M en la visualización inicial
+        
+        self.tableau = np.vstack([upper, obj_display.reshape(1, -1)])
+        
+        print(f"Tablero inicial (función objetivo original):")
+        print(f"Forma: {self.tableau.shape}")
+        print(f"Contenido:\n{self.tableau}")
+        
+        self.basic_variables = basic_vars
+        self.non_basic_variables = self.variable_names.copy()
+        
+        print(f"Variables básicas iniciales: {self.basic_variables}")
+        print(f"Variables no básicas iniciales: {self.non_basic_variables}")
+        
+        # Limpiar iteraciones
+        self.iterations = []
+        
+        # Guardar tablero inicial CON FUNCIÓN OBJETIVO ORIGINAL
+        self._save_iteration("Tablero Inicial")
+        
+        # AHORA aplicar las penalizaciones Big M para el cálculo interno
+        # Reconstruir función objetivo con penalizaciones Big M
+        obj_with_penalties = np.zeros(total_vars + 1)
+        obj_with_penalties[:n] = -c  # Función objetivo original
+        
+        # Penalizar variables artificiales con +M
+        art_start = n + num_slack + num_surplus
+        for i in range(num_artificial):
+            obj_with_penalties[art_start + i] = M
+            print(f"Aplicando penalización Big M a variable artificial a{i+1}")
+        
+        # Actualizar tablero con penalizaciones para cálculos internos
+        self.tableau[-1] = obj_with_penalties
+        
+        # Eliminar variables artificiales de la función objetivo
+        # Si una variable artificial está en la base, necesitamos pivotear para eliminarla
+        for i, var in enumerate(basic_vars):
+            if var.startswith('a'):
+                # Variable artificial en la base - eliminar de función objetivo
+                art_col = art_start + int(var[1:]) - 1
+                if abs(self.tableau[-1, art_col]) > 1e-10:
+                    print(f"Eliminando variable artificial {var} de la función objetivo")
+                    # Restar M veces la fila de la restricción de la fila objetivo
+                    self.tableau[-1] -= M * self.tableau[i]
+    
+    def _apply_big_m_method(self, constraint_types: List[str]):
+        """Método eliminado - simplificamos usando solo conversión a ≤"""
+        pass
     
     def _simplex_algorithm(self) -> Dict:
         """Ejecutar algoritmo Simplex con visualización detallada del proceso iterativo"""
         try:
+            print("DEBUG: Iniciando algoritmo Simplex")
             iteration = 0
             max_iterations = 100
             
             while iteration < max_iterations:
                 iteration += 1
+                print(f"DEBUG: Iteración {iteration}")
                 
                 # Verificar optimalidad
                 if self._is_optimal():
-                    return self._extract_solution()
+                    print("DEBUG: Solución óptima encontrada")
+                    result = self._extract_solution()
+                    print(f"DEBUG: Resultado extraído: {result}")
+                    return result
                 
                 # Encontrar variable que entra (columna pivote)
                 entering_col = self._find_entering_variable()
@@ -625,13 +808,17 @@ class SimplexSolver:
             # El valor en la esquina inferior derecha del tableau representa el valor de Z
             optimal_value = self.tableau[-1, -1]
             
+            # Actualizar función objetivo original con el valor correcto de Z
+            if hasattr(self, 'original_objective'):
+                self.original_objective[-1] = optimal_value
+            
             self.optimal_solution = solution
             self.optimal_value = optimal_value
             
             return {
                 "status": "optimal",
-                "optimal_solution": solution,
-                "optimal_value": optimal_value,
+                "optimal_variables": {k: float(v) for k, v in solution.items()},
+                "optimal_value": float(optimal_value),
                 "basic_variables": self.basic_variables.copy(),
                 "non_basic_variables": self.non_basic_variables.copy(),
                 "iterations": self.iterations.copy(),
@@ -691,7 +878,7 @@ class SimplexSolver:
         
         # Variables de decisión
         output.append(f"\nSOLUCIÓN ÓPTIMA:")
-        solution = result["optimal_solution"]
+        solution = result["optimal_variables"]
         for var, value in solution.items():
             if var in self.variable_names:  # Solo mostrar variables de decisión originales
                 output.append(f"  {var} = {value:.6f}")
@@ -737,7 +924,7 @@ class SimplexSolver:
         
         # Interpretación de resultados
         output.append(f"\nINTERPRETACIÓN DE RESULTADOS:")
-        solution = result["optimal_solution"]
+        solution = result["optimal_variables"]
         if self.is_maximization:
             output.append(f"  • El valor máximo de la función objetivo es {result['optimal_value']:.6f}")
         else:
@@ -837,54 +1024,50 @@ class SimplexSolver:
         var_list = ", ".join(all_vars)
         output.append(f"    {var_list} ≥ 0")
         
-        # Explicación de variables de holgura
-        output.append(f"\nEXPLICACIÓN DE VARIABLES DE HOLGURA:")
-        for i in range(len(A)):
-            output.append(f"  • s{i+1}: Representa los recursos no utilizados en la restricción {i+1}")
-            output.append(f"    Si s{i+1} > 0, la restricción {i+1} no está activa (hay holgura)")
-            output.append(f"    Si s{i+1} = 0, la restricción {i+1} está activa (sin holgura)")
-        
         output.append("\n" + "=" * 80)
         return "\n".join(output)
     
     def _format_tableau_with_highlight(self, tableau: np.ndarray, highlight_row: int = -1, highlight_col: int = -1) -> str:
-        """Formatear tablero simplex para mostrar con highlighting opcional del pivote usando colores"""
+        """Formatear tablero simplex para mostrar con highlighting visual del pivote"""
         output = []
         
-        # Códigos de color ANSI
-        RESET = '\033[0m'
-        RED = '\033[91m'      # Elemento pivote
-        YELLOW = '\033[93m'   # Fila pivote
-        BLUE = '\033[94m'     # Columna pivote
-        GREEN = '\033[92m'    # Variable básica de la fila pivote
-        BOLD = '\033[1m'
-        
-        # Encabezados
+        # Construir encabezados basados en el tamaño real del tablero
         headers = []
         n_original = len(self.variable_names)
+        total_cols = tableau.shape[1] - 1  # Excluir columna RHS
         
-        # Variables originales
+        # Variables originales (x1, x2, etc.)
         for var in self.variable_names:
             headers.append(var)
         
-        # Variables de holgura
-        for i in range(tableau.shape[1] - n_original - 1):
+        # Variables adicionales (holgura, superávit, artificiales)
+        n_additional = total_cols - n_original
+        for i in range(n_additional):
+            # Por defecto usar s1, s2, etc. (se corregirá en versiones futuras)
             headers.append(f"s{i+1}")
         
         # RHS
         headers.append("RHS")
         
+        # Verificar que tenemos el número correcto de encabezados
+        expected_headers = tableau.shape[1]
+        if len(headers) != expected_headers:
+            print(f"ADVERTENCIA: Mismatch en encabezados. Esperados: {expected_headers}, Obtenidos: {len(headers)}")
+            # Ajustar si es necesario
+            while len(headers) < expected_headers:
+                headers.insert(-1, f"col{len(headers)}")
+        
         # Fila de encabezados con columna pivote resaltada
         header_parts = []
         for idx, h in enumerate(headers):
             if idx == highlight_col and highlight_col >= 0:
-                header_parts.append(f"{BLUE}{BOLD}{h:>10}{RESET}")
+                header_parts.append(f">>>{h:>7}<<<")
             else:
                 header_parts.append(f"{h:>10}")
         
         header_line = "Base\t" + "\t".join(header_parts)
         output.append(header_line)
-        output.append("-" * (len(header_line) - len(BLUE) - len(BOLD) - len(RESET) if highlight_col >= 0 else len(header_line)))
+        output.append("=" * 80)
         
         # Filas de restricciones
         for i in range(tableau.shape[0] - 1):
@@ -894,30 +1077,35 @@ class SimplexSolver:
             for j in range(tableau.shape[1]):
                 value = tableau[i, j]
                 if i == highlight_row and j == highlight_col:
-                    # Elemento pivote - rojo y marcado
-                    row_data.append(f"{RED}{BOLD}[{value:8.4f}]*{RESET}")
+                    # Elemento pivote - destacado con asteriscos
+                    row_data.append(f"***{value:6.4f}***")
                 elif i == highlight_row:
-                    # Fila pivote - amarillo
-                    row_data.append(f"{YELLOW}({value:8.4f}){RESET}")
+                    # Fila pivote - destacado con paréntesis
+                    row_data.append(f"({value:8.4f})")
                 elif j == highlight_col:
-                    # Columna pivote - azul
-                    row_data.append(f"{BLUE}<{value:8.4f}>{RESET}")
+                    # Columna pivote - destacado con corchetes
+                    row_data.append(f"[{value:8.4f}]")
                 else:
                     row_data.append(f"{value:10.4f}")
             
-            # Variable básica de la fila pivote en verde
+            # Variable básica de la fila pivote destacada
             if i == highlight_row:
-                prefix = f"{GREEN}→{base_var:>3}{RESET}"
+                prefix = f">>> {base_var} <<<"
             else:
                 prefix = f"{base_var:>4}"
             output.append(f"{prefix}\t" + "\t".join(row_data))
         
-        # Fila objetivo
+        # Fila objetivo - SIEMPRE mostrar función objetivo original
         obj_data = []
         for j in range(tableau.shape[1]):
-            value = tableau[-1, j]
+            # Usar función objetivo original si está disponible
+            if hasattr(self, 'original_objective') and j < len(self.original_objective):
+                value = self.original_objective[j]
+            else:
+                value = tableau[-1, j]
+                
             if j == highlight_col and highlight_col >= 0:
-                obj_data.append(f"{BLUE}<{value:8.4f}>{RESET}")
+                obj_data.append(f"[{value:8.4f}]")
             else:
                 obj_data.append(f"{value:10.4f}")
         
@@ -925,7 +1113,7 @@ class SimplexSolver:
         
         if highlight_row >= 0 and highlight_col >= 0:
             output.append("")
-            output.append(f"Leyenda: {RED}{BOLD}[ ]*{RESET} = Elemento pivote, {YELLOW}( ){RESET} = Fila pivote, {BLUE}< >{RESET} = Columna pivote, {GREEN}→{RESET} = Variable saliente")
+            output.append("Leyenda: ***valor*** = Elemento pivote, (valor) = Fila pivote, [valor] = Columna pivote, >>> var <<< = Variable saliente")
         
         return "\n".join(output)
     
