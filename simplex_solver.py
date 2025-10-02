@@ -388,3 +388,79 @@ class SimplexSolver:
             summary += "*** SOLUCIÓN ÓPTIMA ALCANZADA ***\n\n"
         
         return summary
+    
+    def get_standard_form_explanation(self, c: np.ndarray, A: np.ndarray, b: np.ndarray) -> str:
+        """
+        Generar explicación de la forma estándar del problema
+        
+        Args:
+            c: Coeficientes de la función objetivo
+            A: Matriz de restricciones
+            b: Vector de términos independientes
+            
+        Returns:
+            String con la explicación de la forma estándar
+        """
+        explanation = "CONVERSIÓN A FORMA ESTÁNDAR\n"
+        explanation += "=" * 50 + "\n\n"
+        
+        # Función objetivo
+        explanation += "Función Objetivo:\n"
+        objective_str = "Maximizar Z = "
+        for i, coef in enumerate(c):
+            if i > 0 and coef >= 0:
+                objective_str += " + "
+            elif coef < 0:
+                objective_str += " - "
+                coef = abs(coef)
+            
+            if i == 0 and coef < 0:
+                objective_str += "-"
+                coef = abs(coef)
+            
+            objective_str += f"{coef}x{i+1}"
+        
+        explanation += objective_str + "\n\n"
+        
+        # Restricciones
+        explanation += "Restricciones:\n"
+        for i, (row, rhs) in enumerate(zip(A, b)):
+            constraint_str = ""
+            for j, coef in enumerate(row):
+                if j > 0 and coef >= 0:
+                    constraint_str += " + "
+                elif coef < 0:
+                    constraint_str += " - "
+                    coef = abs(coef)
+                
+                if j == 0 and coef < 0:
+                    constraint_str += "-"
+                    coef = abs(coef)
+                
+                constraint_str += f"{coef}x{j+1}"
+            
+            constraint_str += f" + s{i+1} = {rhs}"
+            explanation += constraint_str + "\n"
+        
+        explanation += "\n"
+        
+        # Variables de holgura
+        explanation += "Variables de holgura agregadas:\n"
+        for i in range(len(b)):
+            explanation += f"s{i+1} ≥ 0 (variable de holgura para restricción {i+1})\n"
+        
+        explanation += "\n"
+        
+        # Restricciones de no negatividad
+        explanation += "Restricciones de no negatividad:\n"
+        for i in range(len(c)):
+            explanation += f"x{i+1} ≥ 0"
+            if i < len(c) - 1:
+                explanation += ", "
+        
+        for i in range(len(b)):
+            explanation += f", s{i+1} ≥ 0"
+        
+        explanation += "\n\n"
+        
+        return explanation
