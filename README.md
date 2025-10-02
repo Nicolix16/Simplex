@@ -241,17 +241,6 @@ La IA debería proporcionar:
 - Evaluación de la función objetivo en cada vértice
 - Solución óptima con interpretación
 
-## 🎯 Comparación de Métodos
-
-| Característica | Método Gráfico | Método Simplex |
-|----------------|----------------|----------------|
-| **Variables máximas** | 2 (x₁, x₂) | 10+ variables |
-| **Restricciones** | Limitadas | 20+ restricciones |
-| **Visualización** | Gráfica 2D intuitiva | Tableau numérico |
-| **Precisión** | Aproximada (visual) | Exacta (algorítmica) |
-| **Casos especiales** | Limitado | Detecta todos |
-| **Iteraciones** | No muestra proceso | Paso a paso detallado |
-| **Educativo** | Muy visual | Proceso algorítmico |
 
 ## 🔧 Uso Avanzado
 
@@ -264,21 +253,6 @@ La IA debería proporcionar:
 - ✅ Hasta 10 variables de decisión
 - ✅ Verificación de optimalidad
 
-### Ejemplo de Salida Simplex:
-```
-SOLUCIÓN POR MÉTODO SIMPLEX
-====================================
-Tipo de problema: MAXIMIZACIÓN
-
-VARIABLES DE DECISIÓN:
-  x1 = 2.000000
-  x2 = 4.000000
-
-VALOR ÓPTIMO:
-  Z = 14.000000
-
-NÚMERO DE ITERACIONES: 2
-```
 
 ## 📊 Archivos del Proyecto
 
