@@ -26,10 +26,9 @@ class LinearProgrammingGUI:
         self.config = Config()
         self.gemini_api = None
         self.image_processor = ImageProcessor()
-        self.simplex_solver = SimplexSolver()
         self.current_image_path = None
-        self.current_simplex_result = None
-        self.current_graph_data = None  # Almacenar datos extraídos del método gráfico
+        self.simplex_solver = SimplexSolver()
+        self.current_problem_data = None  # Guardar datos del problema analizado
         
         self.setup_ui()
         self.check_api_key()
@@ -101,41 +100,7 @@ class LinearProgrammingGUI:
                                                    width=80, height=30)
         self.result_text.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Pestaña 3: Método Simplex
-        simplex_frame = ttk.Frame(notebook, padding="10")
-        notebook.add(simplex_frame, text="Método Simplex")
-        simplex_frame.columnconfigure(0, weight=1)
-        simplex_frame.rowconfigure(2, weight=1)
-        
-        # Botón para Simplex
-        simplex_buttons_frame = ttk.Frame(simplex_frame)
-        simplex_buttons_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
-        
-        self.solve_simplex_btn = ttk.Button(simplex_buttons_frame, text="Resolver con Simplex", 
-                                          command=self.solve_with_simplex, state="disabled")
-        self.solve_simplex_btn.pack(side=tk.LEFT)
-        
-        # Área de texto para análisis Simplex
-        simplex_label = ttk.Label(simplex_frame, text="Análisis y datos para Simplex:")
-        simplex_label.grid(row=1, column=0, sticky=tk.W, pady=(0, 5))
-        
-        self.simplex_analysis_text = scrolledtext.ScrolledText(simplex_frame, wrap=tk.WORD, 
-                                                             width=80, height=12)
-        self.simplex_analysis_text.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        
-        # Área de texto para solución Simplex
-        solution_label = ttk.Label(simplex_frame, text="Solución por método Simplex:")
-        solution_label.grid(row=3, column=0, sticky=tk.W, pady=(0, 5))
-        
-        self.simplex_solution_text = scrolledtext.ScrolledText(simplex_frame, wrap=tk.WORD, 
-                                                             width=80, height=15)
-        self.simplex_solution_text.grid(row=4, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configurar pesos de fila para Simplex
-        simplex_frame.rowconfigure(2, weight=1)
-        simplex_frame.rowconfigure(4, weight=2)
-        
-        # Pestaña 4: Gráfica
+        # Pestaña 3: Gráfica
         graph_frame = ttk.Frame(notebook, padding="10")
         notebook.add(graph_frame, text="Gráfica del Método")
         graph_frame.columnconfigure(0, weight=1)
@@ -162,6 +127,56 @@ class LinearProgrammingGUI:
         toolbar_frame = ttk.Frame(graph_frame)
         toolbar_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
         self.toolbar = NavigationToolbar2Tk(self.graph_canvas, toolbar_frame)
+        
+        # Pestaña 4: Método Simplex
+        simplex_frame = ttk.Frame(notebook, padding="10")
+        notebook.add(simplex_frame, text="Método Simplex")
+        simplex_frame.columnconfigure(0, weight=1)
+        simplex_frame.rowconfigure(1, weight=1)
+        
+        # Frame superior con controles
+        simplex_controls = ttk.Frame(simplex_frame)
+        simplex_controls.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        # Botón para ejecutar Simplex
+        self.simplex_btn = ttk.Button(simplex_controls, text="Resolver con Método Simplex", 
+                                      command=self.solve_simplex, state="disabled")
+        self.simplex_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Label de estado
+        self.simplex_status_label = ttk.Label(simplex_controls, text="Carga y analiza una imagen primero")
+        self.simplex_status_label.pack(side=tk.LEFT, padx=10)
+        
+        # Frame con scroll para las tablas del Simplex
+        simplex_canvas_frame = ttk.Frame(simplex_frame)
+        simplex_canvas_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        simplex_canvas_frame.columnconfigure(0, weight=1)
+        simplex_canvas_frame.rowconfigure(0, weight=1)
+        
+        # Canvas con scrollbar
+        self.simplex_canvas = tk.Canvas(simplex_canvas_frame, bg='white')
+        simplex_scrollbar_y = ttk.Scrollbar(simplex_canvas_frame, orient="vertical", 
+                                           command=self.simplex_canvas.yview)
+        simplex_scrollbar_x = ttk.Scrollbar(simplex_canvas_frame, orient="horizontal",
+                                           command=self.simplex_canvas.xview)
+        
+        self.simplex_canvas.configure(yscrollcommand=simplex_scrollbar_y.set,
+                                     xscrollcommand=simplex_scrollbar_x.set)
+        
+        simplex_scrollbar_y.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        simplex_scrollbar_x.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        self.simplex_canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Frame interior para las tablas
+        self.simplex_content_frame = ttk.Frame(self.simplex_canvas)
+        self.simplex_canvas_window = self.simplex_canvas.create_window((0, 0), 
+                                                                       window=self.simplex_content_frame,
+                                                                       anchor='nw')
+        
+        # Configurar scroll region cuando cambie el tamaño
+        self.simplex_content_frame.bind('<Configure>', 
+                                       lambda e: self.simplex_canvas.configure(
+                                           scrollregion=self.simplex_canvas.bbox('all')))
         
         # Barra de progreso
         self.progress_frame = ttk.Frame(main_frame)
@@ -232,7 +247,6 @@ class LinearProgrammingGUI:
                 
                 self.current_image_path = file_path
                 self.analyze_btn.config(state="normal")
-                self.solve_simplex_btn.config(state="normal")
                 
             except Exception as e:
                 messagebox.showerror("Error", f"Error al cargar la imagen: {str(e)}")
@@ -287,358 +301,19 @@ class LinearProgrammingGUI:
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, response)
         
+        # Extraer datos del problema para Simplex
+        self.current_problem_data = self._extract_graph_data(response)
+        
+        # Habilitar botón de Simplex si se extrajeron datos
+        if self.current_problem_data and self.current_problem_data.get('objective'):
+            self.simplex_btn.config(state="normal")
+            self.simplex_status_label.config(text="Listo para resolver con Simplex")
+        else:
+            self.simplex_btn.config(state="disabled")
+            self.simplex_status_label.config(text="No se pudieron extraer datos del problema")
+        
         # Generar gráfica basada en la respuesta
         self._generate_graph(response)
-    
-    def _show_error(self, error_message):
-        """Mostrar error"""
-        messagebox.showerror("Error", f"Error al analizar la imagen: {error_message}")
-    
-    def _build_problem_text_from_graph_data(self, graph_data):
-        """Construir texto del problema desde datos del método gráfico"""
-        if not graph_data:
-            raise Exception("No hay datos del método gráfico disponibles")
-        
-        problem_text = "=== DATOS PARA SIMPLEX ===\n"
-        
-        # Función objetivo
-        if graph_data.get('objective'):
-            problem_text += f"FUNCION_OBJETIVO: {graph_data['objective']}\n"
-        else:
-            raise Exception("No se encontró función objetivo en los datos del método gráfico")
-        
-        # Restricciones (filtrar restricciones de no negatividad implícitas)
-        if graph_data.get('restrictions'):
-            problem_text += "RESTRICCIONES:\n"
-            for restriction in graph_data['restrictions']:
-                # Filtrar restricciones de no negatividad (son implícitas en el Simplex)
-                if restriction.strip() not in ['x1 >= 0', 'x2 >= 0']:
-                    problem_text += f"- {restriction}\n"
-        else:
-            raise Exception("No se encontraron restricciones en los datos del método gráfico")
-        
-        # Variables
-        problem_text += "VARIABLES: x1, x2\n"
-        problem_text += "=== FIN DATOS SIMPLEX ===\n"
-        
-        return problem_text
-    
-    def solve_with_simplex(self):
-        """Resolver problema usando método Simplex con datos del método gráfico"""
-        if not self.current_graph_data:
-            messagebox.showerror("Error", "Primero analiza el problema con el método gráfico")
-            return
-        
-        try:
-            # Preparar datos automáticamente sin mostrar mensajes
-            problem_text = self._build_problem_text_from_graph_data(self.current_graph_data)
-            
-            # Mostrar datos preparados en el área de análisis silenciosamente
-            self.simplex_analysis_text.delete('1.0', tk.END)
-            self.simplex_analysis_text.insert(tk.END, "DATOS PREPARADOS PARA SIMPLEX:\n")
-            self.simplex_analysis_text.insert(tk.END, "="*50 + "\n\n")
-            self.simplex_analysis_text.insert(tk.END, problem_text)
-            
-            # Ejecutar en hilo separado
-            threading.Thread(target=self._solve_simplex_thread, args=(problem_text,), daemon=True).start()
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Error preparando datos para Simplex: {str(e)}")
-    
-    def _solve_simplex_thread(self, analysis_text):
-        """Hilo para resolver con Simplex"""
-        try:
-            # Actualizar UI
-            self.root.after(0, self._update_progress, True, "Resolviendo con método Simplex...")
-            
-            # Extraer datos y resolver
-            result = self._extract_and_solve_simplex(analysis_text)
-            
-            # Mostrar resultado
-            self.root.after(0, self._display_simplex_solution, result)
-            
-        except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Error al resolver con Simplex: {str(e)}"))
-        finally:
-            self.root.after(0, self._update_progress, False, "Listo")
-    
-    def _extract_and_solve_simplex(self, text):
-        """Extraer datos del análisis y resolver con Simplex"""
-        try:
-            # Buscar la sección de datos para Simplex
-            start_marker = "=== DATOS PARA SIMPLEX ==="
-            end_marker = "=== FIN DATOS SIMPLEX ==="
-            
-            start_idx = text.find(start_marker)
-            end_idx = text.find(end_marker)
-            
-            if start_idx == -1 or end_idx == -1:
-                raise Exception("No se encontraron datos estructurados para Simplex")
-            
-            # Extraer la sección de datos
-            data_section = text[start_idx + len(start_marker):end_idx].strip()
-            
-            # Parsear datos
-            problem_data = self._parse_simplex_data(data_section)
-            
-            if not problem_data:
-                raise Exception("No se pudieron parsear los datos del problema")
-            
-            # Preparar datos para el solver
-            c = np.array(problem_data["objective_coeffs"])
-            A = np.array(problem_data["constraint_matrix"])
-            b = np.array(problem_data["rhs"])
-            
-            # Generar explicación de forma estándar
-            standard_form_explanation = self.simplex_solver.get_standard_form_explanation(c, A, b)
-            
-            # Resolver con Simplex
-            result = self.simplex_solver.solve(
-                c=problem_data["objective_coeffs"],
-                A=problem_data["constraint_matrix"],
-                b=problem_data["rhs"],
-                constraint_types=problem_data.get("constraint_types", None),
-                is_maximization=problem_data["is_maximization"],
-                variable_names=problem_data["variable_names"]
-            )
-            
-            # Agregar explicación de forma estándar al resultado
-            result["standard_form_explanation"] = standard_form_explanation
-            
-            # Guardar resultado para uso posterior
-            self.current_simplex_result = result
-            
-            return result
-            
-        except Exception as e:
-            raise Exception(f"Error resolviendo con Simplex: {str(e)}")
-    
-    def _parse_simplex_data(self, data_section):
-        """Parsear sección de datos para Simplex"""
-        try:
-            lines = data_section.split('\n')
-            
-            # Inicializar variables
-            is_maximization = True
-            objective_coeffs = []
-            constraint_matrix = []
-            rhs = []
-            constraint_types = []
-            variable_names = ["x1", "x2"]
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                if line.startswith('TIPO:'):
-                    # Determinar si es maximización o minimización
-                    is_maximization = 'maximizar' in line.lower() or 'max' in line.lower()
-                    
-                elif line.startswith('FUNCION_OBJETIVO:'):
-                    # Extraer coeficientes de la función objetivo
-                    obj_expr = line.split('=')[1].strip() if '=' in line else ""
-                    objective_coeffs = self._parse_objective_expression(obj_expr)
-                    
-                elif line.startswith('RESTRICCIONES:'):
-                    continue  # Siguiente línea empezará con restricciones
-                    
-                elif line.startswith('- ') and ('x1' in line or 'x2' in line):
-                    # Parsear restricción
-                    constraint = line[2:].strip()  # Quitar "- "
-                    constraint_data = self._parse_constraint_simplex(constraint)
-                    
-                    if constraint_data and constraint_data.get("type") == "constraint":
-                        constraint_matrix.append(constraint_data["coeffs"])
-                        rhs.append(constraint_data["rhs"])
-                        constraint_types.append(constraint_data.get("constraint_type", "<="))
-                        
-                elif line.startswith('VARIABLES:'):
-                    # Extraer nombres de variables si están definidos
-                    var_part = line.split(':')[1].strip()
-                    if var_part:
-                        variable_names = [v.strip() for v in var_part.split(',')]
-            
-            if not objective_coeffs or not constraint_matrix:
-                return None
-                
-            return {
-                "objective_coeffs": objective_coeffs,
-                "constraint_matrix": constraint_matrix,
-                "rhs": rhs,
-                "constraint_types": constraint_types,
-                "is_maximization": is_maximization,
-                "variable_names": variable_names
-            }
-            
-        except Exception as e:
-            print(f"Error parseando datos Simplex: {e}")
-            return None
-    
-    def _parse_objective_expression(self, expr):
-        """Parsear expresión de función objetivo"""
-        try:
-            # Limpiar expresión
-            expr = expr.replace(" ", "").lower()
-            
-            # Buscar coeficientes de x1 y x2
-            coeffs = []
-            
-            # Patrón para x1
-            x1_pattern = r"([+-]?\d*\.?\d*)x1"
-            x1_match = re.search(x1_pattern, expr)
-            if x1_match:
-                coeff_str = x1_match.group(1)
-                if coeff_str == "" or coeff_str == "+":
-                    coeffs.append(1.0)
-                elif coeff_str == "-":
-                    coeffs.append(-1.0)
-                else:
-                    coeffs.append(float(coeff_str))
-            else:
-                coeffs.append(0.0)
-            
-            # Patrón para x2
-            x2_pattern = r"([+-]?\d*\.?\d*)x2"
-            x2_match = re.search(x2_pattern, expr)
-            if x2_match:
-                coeff_str = x2_match.group(1)
-                if coeff_str == "" or coeff_str == "+":
-                    coeffs.append(1.0)
-                elif coeff_str == "-":
-                    coeffs.append(-1.0)
-                else:
-                    coeffs.append(float(coeff_str))
-            else:
-                coeffs.append(0.0)
-                
-            return coeffs
-            
-        except Exception as e:
-            print(f"Error parseando expresión objetivo: {e}")
-            return [1.0, 1.0]  # Valores por defecto
-    
-    def _parse_constraint_simplex(self, constraint):
-        """Parsear restricción para Simplex manteniendo el tipo original"""
-        try:
-            # Limpiar y normalizar
-            clean = constraint.replace(" ", "").lower().replace("≤", "<=").replace("≥", ">=")
-            
-            # Detectar restricciones de no negatividad específicas (solo x1>=0 y x2>=0)
-            if (clean == "x1>=0" or clean == "x2>=0"):
-                return {"type": "bounds"}
-            
-            # Patrones para restricciones
-            patterns = [
-                r"([+-]?\d*\.?\d*)x1([+-]\d*\.?\d*)x2([<>=]{1,2})([+-]?\d+\.?\d*)",
-                r"([+-]?\d*\.?\d*)x1([<>=]{1,2})([+-]?\d+\.?\d*)",
-                r"([+-]?\d*\.?\d*)x2([<>=]{1,2})([+-]?\d+\.?\d*)"
-            ]
-            
-            for pattern in patterns:
-                match = re.search(pattern, clean)
-                if match:
-                    groups = match.groups()
-                    
-                    if len(groups) == 4:  # ax1 + bx2 <= c
-                        a_str, b_str, op, c = groups
-                        
-                        # Parsear coeficientes
-                        if a_str == "" or a_str == "+":
-                            a = 1.0
-                        elif a_str == "-":
-                            a = -1.0
-                        else:
-                            a = float(a_str)
-                            
-                        if b_str == "" or b_str == "+":
-                            b = 1.0
-                        elif b_str == "-":
-                            b = -1.0
-                        else:
-                            b = float(b_str)
-                        
-                        c_val = float(c)
-                        
-                        # Mantener el tipo de restricción original
-                        constraint_type = "<=" if "<=" in op else ">="
-                        
-                        return {
-                            "coeffs": [a, b],
-                            "rhs": c_val,
-                            "type": "constraint",
-                            "constraint_type": constraint_type
-                        }
-                        
-                    elif len(groups) == 3:  # ax1 <= c o bx2 <= c
-                        if "x1" in pattern:
-                            a_str, op, c = groups
-                            if a_str == "" or a_str == "+":
-                                a = 1.0
-                            elif a_str == "-":
-                                a = -1.0
-                            else:
-                                a = float(a_str)
-                                
-                            c_val = float(c)
-                            constraint_type = "<=" if "<=" in op else ">="
-                                
-                            return {
-                                "coeffs": [a, 0.0],
-                                "rhs": c_val,
-                                "type": "constraint",
-                                "constraint_type": constraint_type
-                            }
-                        else:  # x2
-                            b_str, op, c = groups
-                            if b_str == "" or b_str == "+":
-                                b = 1.0
-                            elif b_str == "-":
-                                b = -1.0
-                            else:
-                                b = float(b_str)
-                                
-                            c_val = float(c)
-                            constraint_type = "<=" if "<=" in op else ">="
-                                
-                            return {
-                                "coeffs": [0.0, b],
-                                "rhs": c_val,
-                                "type": "constraint",
-                                "constraint_type": constraint_type
-                            }
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error parseando restricción Simplex '{constraint}': {e}")
-            return None
-    
-    def _display_simplex_solution(self, result):
-        """Mostrar solución del Simplex"""
-        self.simplex_solution_text.delete(1.0, tk.END)
-        
-        if "error" in result:
-            error_text = f"ERROR EN SIMPLEX:\n{result['error']}\n\n"
-            error_text += "Verifica que el problema esté bien formulado:\n"
-            error_text += "- Todas las restricciones deben ser ≤ para maximización\n"
-            error_text += "- Los valores del lado derecho deben ser ≥ 0\n"
-            error_text += "- Las variables deben ser ≥ 0"
-            self.simplex_solution_text.insert(tk.END, error_text)
-        else:
-            # Mostrar explicación de forma estándar si está disponible
-            if "standard_form_explanation" in result:
-                self.simplex_solution_text.insert(tk.END, result["standard_form_explanation"])
-                self.simplex_solution_text.insert(tk.END, "\n\n")
-            
-            # Mostrar solución formateada
-            formatted_solution = self.simplex_solver.get_formatted_solution(result)
-            self.simplex_solution_text.insert(tk.END, formatted_solution)
-            
-            # Agregar resumen de iteraciones si está disponible
-            if "iterations" in result and len(result["iterations"]) > 1:
-                iterations_summary = self.simplex_solver.get_iterations_summary(result)
-                self.simplex_solution_text.insert(tk.END, f"\n\n{iterations_summary}")
     
     def _show_error(self, error_message):
         """Mostrar error"""
@@ -654,9 +329,6 @@ class LinearProgrammingGUI:
             
             # Intentar extraer datos específicos de la respuesta
             graph_data = self._extract_graph_data(response)
-            
-            # Almacenar datos para uso posterior en Simplex
-            self.current_graph_data = graph_data
             
             if graph_data and graph_data.get('restrictions') and graph_data.get('vertices'):
                 print("Usando datos extraídos de la IA")
@@ -1189,131 +861,210 @@ class LinearProgrammingGUI:
             self.ax.set_title("Gráfica del Método Gráfico")
             print(f"Error en gráfica inicial: {e}")
     
-    def _validate_graphic_solution(self, graph_data):
-        """Validar la solución del método gráfico usando Simplex como referencia"""
+    def solve_simplex(self):
+        """Resolver problema usando método Simplex"""
+        if not self.current_problem_data:
+            messagebox.showerror("Error", "No hay datos del problema para resolver")
+            return
+        
+        # Ejecutar en hilo separado
+        threading.Thread(target=self._solve_simplex_thread, daemon=True).start()
+    
+    def _solve_simplex_thread(self):
+        """Hilo para resolver con Simplex"""
         try:
-            if not graph_data or not graph_data.get('optimal_point') or not graph_data.get('optimal_value'):
-                return None
-                
-            # Construir el problema para Simplex
-            if not graph_data.get('objective') or not graph_data.get('restrictions'):
-                return None
-                
-            # Extraer datos del método gráfico
-            restrictions = graph_data['restrictions']
-            graphic_optimal = graph_data['optimal_point']
-            graphic_value = graph_data['optimal_value']
+            self.root.after(0, self._update_progress, True, "Resolviendo con Simplex...")
+            self.root.after(0, lambda: self.simplex_status_label.config(text="Resolviendo..."))
             
-            # Construir texto del problema para Simplex usando los mismos datos
-            problem_text = self._build_problem_text_from_graph_data(graph_data)
+            # Obtener función objetivo y restricciones
+            objective = self.current_problem_data.get('objective', '')
+            restrictions = self.current_problem_data.get('restrictions', [])
+            
+            if not objective or not restrictions:
+                self.root.after(0, self._show_error, "Datos del problema incompletos")
+                return
             
             # Resolver con Simplex
-            from simplex_solver import SimplexSolver
-            solver = SimplexSolver()
-            simplex_result = solver.solve_from_text(problem_text)
+            result = self.simplex_solver.solve_from_text(objective, restrictions)
             
-            if simplex_result.get('status') != 'optimal':
-                return f"⚠️ Simplex no pudo resolver el problema: {simplex_result.get('error', 'Estado no óptimo')}\n"
-            
-            # Comparar resultados
-            simplex_value = simplex_result['optimal_value']
-            simplex_solution = simplex_result['optimal_solution']
-            simplex_x1 = float(simplex_solution.get('x1', 0))
-            simplex_x2 = float(simplex_solution.get('x2', 0))
-            
-            validation_msg = ""
-            validation_msg += f"COMPARACIÓN DE MÉTODOS (usando mismos datos):\n"
-            validation_msg += f"• Método Gráfico (IA): Punto {graphic_optimal}, Valor = {graphic_value}\n"
-            validation_msg += f"• Método Simplex: x1={simplex_x1:.3f}, x2={simplex_x2:.3f}, Valor = {simplex_value:.3f}\n"
-            
-            # Verificar factibilidad del punto del Simplex con las restricciones interpretadas por Gemini
-            factible_simplex = self._check_feasibility(simplex_x1, simplex_x2, restrictions)
-            factible_grafico = self._check_feasibility(graphic_optimal[0], graphic_optimal[1], restrictions)
-            
-            validation_msg += f"\nVERIFICACIÓN DE FACTIBILIDAD:\n"
-            validation_msg += f"• Punto Gráfico {graphic_optimal}: {'✅ FACTIBLE' if factible_grafico else '❌ NO FACTIBLE'}\n"
-            validation_msg += f"• Punto Simplex ({simplex_x1:.1f}, {simplex_x2:.1f}): {'✅ FACTIBLE' if factible_simplex else '❌ NO FACTIBLE'}\n"
-            
-            # Verificar si coinciden (con tolerancia para errores de redondeo)
-            tolerance = 0.1
-            value_diff = abs(graphic_value - simplex_value)
-            
-            if not factible_simplex and factible_grafico:
-                validation_msg += f"🚨 PROBLEMA DETECTADO: El Simplex generó una solución NO FACTIBLE\n"
-                validation_msg += f"   Esto indica un error en la interpretación de restricciones.\n"
-                validation_msg += f"   Usar solución del método gráfico: {graphic_optimal}, Z = {graphic_value}\n"
-            elif not factible_grafico and factible_simplex:
-                validation_msg += f"🚨 PROBLEMA DETECTADO: El método gráfico generó una solución NO FACTIBLE\n"
-                validation_msg += f"   Esto indica un error en la interpretación de IA.\n"
-                validation_msg += f"   Usar solución del Simplex: ({simplex_x1:.1f}, {simplex_x2:.1f}), Z = {simplex_value}\n"
-            elif not factible_simplex and not factible_grafico:
-                validation_msg += f"🚨 PROBLEMA GRAVE: Ningún método generó una solución factible\n"
-                validation_msg += f"   Revisar la interpretación de la imagen y las restricciones.\n"
-            elif value_diff <= tolerance:
-                validation_msg += f"✅ RESULTADOS COINCIDEN (diferencia: {value_diff:.3f})\n"
-                if abs(simplex_x1 - graphic_optimal[0]) > 0.5 or abs(simplex_x2 - graphic_optimal[1]) > 0.5:
-                    validation_msg += f"   Nota: Puntos diferentes pero valor óptimo igual (soluciones múltiples)\n"
-            else:
-                validation_msg += f"❌ DISCREPANCIA DETECTADA (diferencia: {value_diff:.3f})\n"
-                if factible_simplex and factible_grafico:
-                    validation_msg += f"   Ambos puntos son factibles. Revisar cálculos.\n"
-                validation_msg += f"   El método Simplex es más confiable matemáticamente.\n"
-            
-            return validation_msg
+            # Mostrar resultado
+            self.root.after(0, self._display_simplex_result, result)
             
         except Exception as e:
-            return f"⚠️ Error en validación: {str(e)}\n"
+            self.root.after(0, self._show_error, f"Error en Simplex: {str(e)}")
+        finally:
+            self.root.after(0, self._update_progress, False, "Listo")
     
-    def _check_feasibility(self, x1, x2, restrictions):
-        """Verificar si un punto satisface todas las restricciones"""
-        try:
-            for restriction in restrictions:
-                if not self._evaluate_constraint(x1, x2, restriction):
-                    return False
-            return True
-        except:
-            return True  # Si hay error, asumir factible para no dar falsos negativos
+    def _display_simplex_result(self, result):
+        """Mostrar resultado del método Simplex"""
+        # Limpiar contenido anterior
+        for widget in self.simplex_content_frame.winfo_children():
+            widget.destroy()
+        
+        if result['status'] == 'error':
+            error_label = ttk.Label(self.simplex_content_frame, 
+                                   text=f"Error: {result['message']}", 
+                                   foreground='red', font=('Arial', 12, 'bold'))
+            error_label.pack(pady=20)
+            self.simplex_status_label.config(text="Error al resolver")
+            return
+        
+        if result['status'] == 'unbounded':
+            error_label = ttk.Label(self.simplex_content_frame,
+                                   text=result['message'],
+                                   foreground='orange', font=('Arial', 12, 'bold'))
+            error_label.pack(pady=20)
+            self.simplex_status_label.config(text="Problema no acotado")
+            return
+        
+        # Mostrar solución óptima
+        if result['status'] == 'optimal':
+            solution_frame = ttk.LabelFrame(self.simplex_content_frame, 
+                                           text="SOLUCIÓN ÓPTIMA", 
+                                           padding="15")
+            solution_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            # Valor óptimo
+            value_label = ttk.Label(solution_frame, 
+                                   text=f"Valor Óptimo: Z = {result['optimal_value']:.4f}",
+                                   font=('Arial', 14, 'bold'),
+                                   foreground='darkgreen')
+            value_label.pack(anchor=tk.W, pady=5)
+            
+            # Variables
+            vars_text = "Variables: "
+            for i, (var_name, val) in enumerate(zip(result['variable_names'], result['solution'])):
+                vars_text += f"{var_name} = {val:.4f}"
+                if i < len(result['variable_names']) - 1:
+                    vars_text += ", "
+            
+            vars_label = ttk.Label(solution_frame, 
+                                  text=vars_text,
+                                  font=('Arial', 12))
+            vars_label.pack(anchor=tk.W, pady=5)
+            
+            self.simplex_status_label.config(text="Solución óptima encontrada")
+        
+        # Mostrar iteraciones
+        iterations = result.get('iterations', [])
+        if iterations:
+            iterations_label = ttk.Label(self.simplex_content_frame,
+                                        text=f"Total de iteraciones: {len(iterations) - 1}",
+                                        font=('Arial', 12, 'bold'))
+            iterations_label.pack(pady=10)
+            
+            # Mostrar cada iteración
+            for iter_data in iterations:
+                self._create_iteration_table(iter_data)
+        
+        # Actualizar scroll region
+        self.simplex_content_frame.update_idletasks()
+        self.simplex_canvas.configure(scrollregion=self.simplex_canvas.bbox('all'))
     
-    def _evaluate_constraint(self, x1, x2, constraint):
-        """Evaluar una restricción específica para un punto dado"""
-        try:
-            # Limpiar la restricción
-            clean = constraint.replace(" ", "").lower()
+    def _create_iteration_table(self, iter_data):
+        """Crear tabla para una iteración del Simplex"""
+        iteration_num = iter_data['iteration']
+        
+        # Frame para esta iteración
+        iter_frame = ttk.LabelFrame(self.simplex_content_frame,
+                                   padding="10")
+        iter_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Título
+        if iteration_num == 0:
+            title = "TABLA INICIAL"
+            title_color = 'blue'
+        elif iter_data.get('is_optimal', False):
+            title = f"ITERACIÓN {iteration_num} - SOLUCIÓN ÓPTIMA"
+            title_color = 'darkgreen'
+        else:
+            title = f"ITERACIÓN {iteration_num}"
+            title_color = 'black'
+        
+        title_label = ttk.Label(iter_frame, text=title, 
+                               font=('Arial', 12, 'bold'),
+                               foreground=title_color)
+        title_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # Información de pivote
+        if iter_data['pivot_row'] >= 0 and iter_data['pivot_col'] >= 0:
+            pivot_col_name = iter_data['col_names'][iter_data['pivot_col']]
+            pivot_row_name = iter_data['row_names'][iter_data['pivot_row']]
+            pivot_val = iter_data['tableau'][iter_data['pivot_row'], iter_data['pivot_col']]
             
-            # Restricciones de no negatividad
-            if "x1>=0" in clean or "x2>=0" in clean:
-                return x1 >= -0.001 and x2 >= -0.001  # Pequeña tolerancia
+            pivot_info = f"Columna Pivote: {pivot_col_name} | Fila Pivote: {pivot_row_name} | Elemento Pivote: {pivot_val:.4f}"
+            pivot_label = ttk.Label(iter_frame, text=pivot_info,
+                                   font=('Arial', 10),
+                                   foreground='darkred')
+            pivot_label.pack(anchor=tk.W, pady=(0, 10))
+        
+        # Crear tabla
+        table_frame = tk.Frame(iter_frame, relief=tk.SOLID, borderwidth=1)
+        table_frame.pack(fill=tk.BOTH, expand=True)
+        
+        tableau = iter_data['tableau']
+        col_names = iter_data['col_names']
+        row_names = iter_data['row_names']
+        pivot_row = iter_data['pivot_row']
+        pivot_col = iter_data['pivot_col']
+        
+        # Encabezado - columna vacía para nombres de fila
+        header_cell = tk.Label(table_frame, text="Base", 
+                              font=('Arial', 10, 'bold'),
+                              relief=tk.RIDGE, borderwidth=1,
+                              bg='lightgray', width=8)
+        header_cell.grid(row=0, column=0, sticky='nsew')
+        
+        # Encabezados de columna
+        for j, col_name in enumerate(col_names):
+            bg_color = 'yellow' if j == pivot_col and pivot_col >= 0 else 'lightgray'
+            header_cell = tk.Label(table_frame, text=col_name,
+                                  font=('Arial', 10, 'bold'),
+                                  relief=tk.RIDGE, borderwidth=1,
+                                  bg=bg_color, width=10)
+            header_cell.grid(row=0, column=j+1, sticky='nsew')
+        
+        # Filas de datos
+        n_rows, n_cols = tableau.shape
+        
+        for i in range(n_rows):
+            # Nombre de fila
+            bg_color = 'lightblue' if i == pivot_row and pivot_row >= 0 else 'lightgray'
+            row_label = tk.Label(table_frame, text=row_names[i],
+                               font=('Arial', 10, 'bold'),
+                               relief=tk.RIDGE, borderwidth=1,
+                               bg=bg_color, width=8)
+            row_label.grid(row=i+1, column=0, sticky='nsew')
             
-            # Parsear restricciones del tipo ax1 + bx2 <= c
-            import re
-            
-            # Patrón para ax1 + bx2 <= c
-            pattern = r"([+-]?\d*\.?\d*)x1([+-]\d*\.?\d*)x2([<>=]{1,2})(\d+\.?\d*)"
-            match = re.search(pattern, clean)
-            
-            if match:
-                a_str, b_str, op, c_str = match.groups()
+            # Valores
+            for j in range(n_cols):
+                value = tableau[i, j]
                 
-                # Parsear coeficientes
-                a = 1.0 if a_str in ["", "+"] else -1.0 if a_str == "-" else float(a_str)
-                b = 1.0 if b_str in ["", "+"] else -1.0 if b_str == "-" else float(b_str)
-                c = float(c_str)
+                # Determinar color de fondo
+                bg_color = 'white'
+                fg_color = 'black'
+                font_weight = 'normal'
                 
-                # Evaluar la restricción
-                left_side = a * x1 + b * x2
+                # Resaltar elemento pivote
+                if i == pivot_row and j == pivot_col and pivot_row >= 0 and pivot_col >= 0:
+                    bg_color = 'red'
+                    fg_color = 'white'
+                    font_weight = 'bold'
+                # Resaltar columna pivote
+                elif j == pivot_col and pivot_col >= 0 and i != n_rows - 1:
+                    bg_color = 'lightyellow'
+                # Resaltar fila pivote
+                elif i == pivot_row and pivot_row >= 0:
+                    bg_color = 'lightcyan'
+                # Fila Z
+                elif i == n_rows - 1:
+                    bg_color = 'lavender'
                 
-                if "<=" in op:
-                    return left_side <= c + 0.001  # Pequeña tolerancia
-                elif ">=" in op:
-                    return left_side >= c - 0.001
-                elif "=" in op:
-                    return abs(left_side - c) <= 0.001
-            
-            # Si no se puede parsear, asumir que se cumple
-            return True
-            
-        except Exception as e:
-            return True  # En caso de error, asumir que se cumple
+                cell = tk.Label(table_frame, text=f"{value:.4f}",
+                              font=('Arial', 9, font_weight),
+                              relief=tk.RIDGE, borderwidth=1,
+                              bg=bg_color, fg=fg_color, width=10)
+                cell.grid(row=i+1, column=j+1, sticky='nsew')
     
     def run(self):
         """Ejecutar la aplicación"""
