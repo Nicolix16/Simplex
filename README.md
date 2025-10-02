@@ -2,17 +2,26 @@
 
 Una aplicación con interfaz gráfica que utiliza la API de Google Gemini para resolver problemas de programación lineal mediante el **método gráfico** y el **método Simplex** a partir de imágenes.
 
-## 📋 Características
+## 📋 Características Principales
 
-- **Análisis de imágenes**: Carga imágenes de problemas de programación lineal
-- **IA integrada**: Utiliza Google Gemini 2.0 Flash para análisis automático
-- **Método gráfico**: Resuelve problemas paso a paso usando el método gráfico
-- **Método Simplex**: Implementación completa del algoritmo Simplex
-- **Doble funcionalidad**: Compara soluciones entre método gráfico y Simplex
-- **Interfaz amigable**: GUI desarrollada con tkinter con pestañas organizadas
-- **Soporte múltiple**: Acepta formatos PNG, JPG, JPEG, GIF, BMP
+- **Análisis de imágenes con IA**: Carga imágenes de problemas de programación lineal
+- **Google Gemini 2.0 Flash**: Análisis automático inteligente de problemas
+- **Método gráfico**: Resuelve problemas de 2 variables paso a paso 
+- **Método Simplex completo**: Implementación robusta del algoritmo Simplex
+- **Comparación dual**: Compara soluciones entre método gráfico y Simplex
+- **Interfaz moderna**: GUI con tkinter organizada en pestañas intuitivas
+- **Múltiples formatos**: Acepta PNG, JPG, JPEG, GIF, BMP, WEBP
 - **Optimización automática**: Redimensiona imágenes grandes automáticamente
-- **Iteraciones detalladas**: Muestra paso a paso las iteraciones del Simplex
+- **Iteraciones detalladas**: Muestra cada paso del algoritmo Simplex
+- **Forma estándar**: Conversión automática a forma estándar con explicación
+
+## ✨ Novedades Recientes
+
+### 🆕 Funcionalidades Agregadas:
+- ✅ **Método `get_standard_form_explanation`**: Explicación detallada de conversión a forma estándar
+- ✅ **Mejor manejo de errores**: Detección y corrección automática de problemas
+- ✅ **Soporte ampliado**: Hasta 10 variables y 20 restricciones
+- ✅ **Optimización de código**: Mejor rendimiento y estabilidad
 
 ## 🚀 Instalación
 
@@ -92,16 +101,38 @@ x₁ ≥ 0, x₂ ≥ 0
 ## 📁 Estructura del proyecto
 
 ```
-Optimization-Solver-with-Graphic-Method-And-AI/
-├── main.py              # Interfaz gráfica principal
-├── gemini_api.py        # Manejo de la API de Gemini
-├── image_processor.py   # Procesamiento de imágenes
-├── simplex_solver.py    # Implementación del método Simplex
-├── config.py           # Configuración y almacenamiento de API key
-├── test_simplex.py     # Archivo de prueba para Simplex
-├── requirements.txt    # Dependencias del proyecto
-└── README.md          # Este archivo
+Simplex/
+├── main.py                 # 🎯 Interfaz gráfica principal (Tkinter)
+├── simplex_solver.py       # 🧮 Implementación completa del método Simplex
+├── gemini_api.py          # 🤖 Integración con Google Gemini API
+├── image_processor.py     # 🖼️ Procesamiento y optimización de imágenes
+├── config.py             # ⚙️ Configuración y manejo de API keys
+├── requirements.txt      # 📦 Dependencias del proyecto
+├── README.md            # 📋 Documentación principal
+├── GUIA_SIMPLEX.md      # 📚 Guía detallada del método Simplex
+└── ejemplos/            # 📷 Imágenes de ejemplo para pruebas
+    ├── ejemplo.jpg
+    └── ejemplo2.jpg
 ```
+
+### 🔍 Descripción de Archivos Principales
+
+#### `simplex_solver.py` (Núcleo del proyecto)
+- **Clase**: `SimplexSolver`
+- **Métodos principales**:
+  - `solve()`: Algoritmo Simplex completo
+  - `parse_problem()`: Análisis de problemas desde texto
+  - `get_standard_form_explanation()`: Explicación de forma estándar
+  - `get_iteration_summary()`: Resumen de iteraciones
+- **Capacidades**: Hasta 10 variables, 20 restricciones, detección de casos especiales
+
+#### `main.py` (Interfaz de usuario)
+- **Framework**: Tkinter con diseño por pestañas
+- **Pestañas disponibles**:
+  1. **Configuración**: API key y carga de imágenes
+  2. **Análisis y Solución**: Método gráfico con IA
+  3. **Gráfica del Método**: Visualización de soluciones
+  4. **Método Simplex**: Algoritmo Simplex paso a paso
 
 ## 🧮 Características del Método Simplex
 
@@ -142,6 +173,20 @@ Puedes modificar la configuración editando `config.py`:
 - **Tamaño máximo de imagen**: Modifica `max_file_size` en `ImageProcessor`
 - **Prompt de IA**: Edita el prompt en `gemini_api.py` para ajustar el análisis
 - **Formatos soportados**: Añade más formatos en `supported_formats`
+
+## 🔄 Estado del Proyecto
+
+### ✅ Últimas Correcciones (Octubre 2025)
+- **Problema resuelto**: Error `AttributeError: 'SimplexSolver' object has no attribute 'get_standard_form_explanation'`
+- **Método agregado**: `get_standard_form_explanation()` completamente implementado
+- **Funcionalidad**: Genera explicaciones detalladas de la conversión a forma estándar
+- **Estabilidad**: Código completamente funcional sin errores conocidos
+
+### 🚀 Estado Actual
+- ✅ **Funcionando**: Todas las funcionalidades operativas
+- ✅ **Probado**: Sin errores en ejecución
+- ✅ **Actualizado**: Última versión en repositorio GitHub
+- ✅ **Documentado**: README completo y actualizado
 
 ## 🐛 Solución de problemas
 
